@@ -49,7 +49,7 @@
         </section>
 
         <section class="rates-section">
-            <h2>Today's Rates</h2>
+            <h2>Available Rates <span class="rate-coverage-badge" id="rate-coverage-badge"></span></h2>
             <div class="rates-table-container">
                 <table class="rates-table" id="rates-table">
                     <thead>
@@ -68,6 +68,7 @@
 
         <footer>
             <p>Data from Home Assistant | Tesla Model Y LR (75kWh) | 7kW Charger</p>
+            <p class="last-updated">Last updated: <span id="last-updated">--</span></p>
         </footer>
     </div>
 
@@ -106,11 +107,50 @@
                     updateRatesTable(data.rates);
                 }
 
+                // Update rate coverage badge
+                if (data.rates_info) {
+                    updateRateCoverageBadge(data.rates_info);
+                }
+
                 // Calculate initial energy needed
                 updateEnergyNeeded();
+
+                // Update last updated timestamp
+                const now = new Date();
+                document.getElementById('last-updated').textContent =
+                    now.toLocaleTimeString('en-GB', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                    });
             } catch (error) {
                 console.error('Error fetching status:', error);
             }
+        }
+
+        function updateRateCoverageBadge(ratesInfo) {
+            const badge = document.getElementById('rate-coverage-badge');
+            if (!badge) return;
+
+            let text = '';
+            let badgeClass = 'rate-coverage-badge';
+
+            if (ratesInfo.includes_today && ratesInfo.includes_tomorrow) {
+                text = 'Today + Tomorrow';
+                badgeClass += ' badge-full';
+            } else if (ratesInfo.includes_tomorrow) {
+                text = 'Tomorrow only';
+                badgeClass += ' badge-partial';
+            } else if (ratesInfo.includes_today) {
+                text = 'Today only';
+                badgeClass += ' badge-partial';
+            } else {
+                text = 'No rates';
+                badgeClass += ' badge-error';
+            }
+
+            badge.textContent = text;
+            badge.className = badgeClass;
         }
 
         function updateRatesTable(rates) {
@@ -215,7 +255,8 @@
                 return;
             }
 
-            const contiguousText = data.is_contiguous ? 'contiguous' : 'scattered';
+            const blockCount = data.blocks.length;
+            const blockLabel = blockCount === 1 ? 'Block' : 'Blocks';
 
             summary.innerHTML = `
                 <div class="summary-stats">
@@ -224,8 +265,8 @@
                         <span class="stat-label">Energy needed</span>
                     </div>
                     <div class="stat">
-                        <span class="stat-value">${data.slots_needed}</span>
-                        <span class="stat-label">Slots (${contiguousText})</span>
+                        <span class="stat-value">${blockCount}</span>
+                        <span class="stat-label">${blockLabel} (${data.slots_needed} slots)</span>
                     </div>
                     <div class="stat highlight">
                         <span class="stat-value">&pound;${data.total_cost_pounds.toFixed(2)}</span>

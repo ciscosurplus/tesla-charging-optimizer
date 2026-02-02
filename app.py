@@ -22,6 +22,9 @@ KWH_PER_SLOT = CHARGER_POWER_KW * SLOT_DURATION_HOURS  # 3.5 kWh per slot
 # Default target charge
 DEFAULT_TARGET_PERCENT = 80
 
+# Application version
+APP_VERSION = "1.2.0"
+
 
 def load_ha_token():
     """Load HA token from environment or config file."""
@@ -303,6 +306,40 @@ def api_calculate():
     result["includes_tomorrow"] = rates_result["includes_tomorrow"]
 
     return jsonify(result)
+
+
+@app.route("/health")
+def health():
+    """Health check endpoint for container orchestration."""
+    from datetime import datetime
+
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "version": APP_VERSION,
+        "checks": {}
+    }
+
+    # Optional: Check Home Assistant connectivity
+    check_ha = request.args.get("check_ha", "false").lower() == "true"
+
+    if check_ha:
+        try:
+            ha_api_get("config")
+            health_status["checks"]["home_assistant"] = {
+                "status": "connected",
+                "url": HA_URL
+            }
+        except Exception as e:
+            health_status["status"] = "degraded"
+            health_status["checks"]["home_assistant"] = {
+                "status": "disconnected",
+                "url": HA_URL,
+                "error": str(e)
+            }
+            return jsonify(health_status), 503
+
+    return jsonify(health_status)
 
 
 if __name__ == "__main__":

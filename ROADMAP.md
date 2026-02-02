@@ -6,10 +6,10 @@ Future improvements for the Tesla Charging Optimizer.
 
 Simple changes that can be done immediately.
 
-- [ ] Update "Today's Rates" heading to "Available Rates" (now includes tomorrow)
-- [ ] Add rate coverage badge showing "Today only" vs "Today + Tomorrow"
-- [ ] Add health check endpoint (`/health`) for Coolify monitoring
-- [ ] Show last updated timestamp in the UI
+- [x] Update "Today's Rates" heading to "Available Rates" (now includes tomorrow)
+- [x] Add rate coverage badge showing "Today only" vs "Today + Tomorrow"
+- [x] Add health check endpoint (`/health`) for Coolify monitoring
+- [x] Show last updated timestamp in the UI
 
 ## High Value
 

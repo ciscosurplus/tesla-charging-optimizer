@@ -53,6 +53,37 @@ h2 {
     padding-left: 10px;
 }
 
+/* Rate Coverage Badge */
+.rate-coverage-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    margin-left: 10px;
+    font-size: 0.7rem;
+    font-weight: normal;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-radius: 12px;
+    vertical-align: middle;
+}
+
+.rate-coverage-badge.badge-full {
+    background: #0a3d2e;
+    color: #10b981;
+    border: 1px solid #10b981;
+}
+
+.rate-coverage-badge.badge-partial {
+    background: #3d2e0a;
+    color: #f59e0b;
+    border: 1px solid #f59e0b;
+}
+
+.rate-coverage-badge.badge-error {
+    background: #3d0a0a;
+    color: #ef4444;
+    border: 1px solid #ef4444;
+}
+
 /* Status Section */
 .status-section {
     background: #16213e;
@@ -356,6 +387,17 @@ footer {
     padding: 20px;
     color: #666;
     font-size: 0.85rem;
+}
+
+.last-updated {
+    margin-top: 8px;
+    color: #888;
+    font-size: 0.8rem;
+}
+
+.last-updated span {
+    color: #10b981;
+    font-weight: 500;
 }
 
 /* Scrollbar styling */

@@ -2,6 +2,17 @@
 
 All notable changes to the Tesla Charging Optimizer will be documented in this file.
 
+## [1.2.0] - 2026-02-02
+
+### Added
+- **Rate coverage badge**: Visual indicator showing whether rates include "Today only", "Tomorrow only", or "Today + Tomorrow"
+- **Health check endpoint**: `GET /health` for container orchestration, with optional `?check_ha=true` for deep health checks
+- **Last updated timestamp**: Footer now shows when data was last refreshed
+- **APP_VERSION constant**: Centralized version tracking in app.py
+
+### Changed
+- Renamed "Today's Rates" heading to "Available Rates" for accuracy
+
 ## [1.1.0] - 2026-02-02
 
 ### Added
