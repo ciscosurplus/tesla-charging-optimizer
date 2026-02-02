@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tesla Charging Optimizer</title>
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -50,6 +52,9 @@
 
         <section class="rates-section">
             <h2>Available Rates <span class="rate-coverage-badge" id="rate-coverage-badge"></span></h2>
+            <div class="rate-chart-container">
+                <canvas id="rate-chart"></canvas>
+            </div>
             <div class="rates-table-container">
                 <table class="rates-table" id="rates-table">
                     <thead>
@@ -77,6 +82,7 @@
         const BATTERY_CAPACITY = 75;
         let currentRates = [];
         let selectedSlots = [];
+        let rateChart = null;
 
         async function fetchStatus() {
             try {
@@ -105,6 +111,8 @@
                 if (data.rates && !data.rates.error) {
                     currentRates = data.rates;
                     updateRatesTable(data.rates);
+                    // Render rate chart
+                    renderRateChart(data.rates);
                 }
 
                 // Update rate coverage badge
@@ -151,6 +159,153 @@
 
             badge.textContent = text;
             badge.className = badgeClass;
+        }
+
+        function renderRateChart(rates, optimalSlots = []) {
+            const ctx = document.getElementById('rate-chart').getContext('2d');
+
+            // Store selected slots for highlighting
+            selectedSlots = optimalSlots;
+
+            // Find current time index
+            const now = new Date();
+            let currentTimeIndex = -1;
+
+            // Prepare data
+            const labels = rates.map((r, i) => {
+                const time = new Date(r.start);
+                if (time <= now && new Date(r.end) > now) {
+                    currentTimeIndex = i;
+                }
+                return time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            });
+
+            const data = rates.map(r => r.rate);
+
+            // Create set of optimal slot starts for quick lookup
+            const optimalStarts = new Set(optimalSlots.map(s => s.start));
+
+            // Generate colors based on rate value and optimal status
+            const backgroundColors = rates.map((r, i) => {
+                const startTime = new Date(r.start);
+                const isPast = new Date(r.end) < now;
+                const isOptimal = optimalStarts.has(r.start);
+
+                if (isOptimal) return 'rgba(16, 185, 129, 0.9)';
+                if (isPast) return 'rgba(100, 100, 100, 0.3)';
+                if (r.rate < 10) return 'rgba(16, 185, 129, 0.6)';
+                if (r.rate < 20) return 'rgba(245, 158, 11, 0.6)';
+                if (r.rate < 30) return 'rgba(249, 115, 22, 0.6)';
+                return 'rgba(239, 68, 68, 0.6)';
+            });
+
+            const borderColors = rates.map(r => {
+                return optimalStarts.has(r.start) ? '#10b981' : 'transparent';
+            });
+
+            const borderWidths = rates.map(r => {
+                return optimalStarts.has(r.start) ? 2 : 0;
+            });
+
+            // Build annotations
+            const annotations = {};
+
+            // Current time marker
+            if (currentTimeIndex >= 0) {
+                annotations.currentTime = {
+                    type: 'line',
+                    xMin: currentTimeIndex,
+                    xMax: currentTimeIndex,
+                    borderColor: '#e31937',
+                    borderWidth: 2,
+                    label: {
+                        display: true,
+                        content: 'NOW',
+                        position: 'start',
+                        backgroundColor: '#e31937',
+                        color: '#fff',
+                        font: { size: 10, weight: 'bold' }
+                    }
+                };
+            }
+
+            // Day boundary markers
+            let prevDate = null;
+            rates.forEach((r, i) => {
+                const date = new Date(r.start).toDateString();
+                if (prevDate && date !== prevDate) {
+                    annotations[`day${i}`] = {
+                        type: 'line',
+                        xMin: i,
+                        xMax: i,
+                        borderColor: 'rgba(255, 255, 255, 0.3)',
+                        borderWidth: 1,
+                        borderDash: [5, 5]
+                    };
+                }
+                prevDate = date;
+            });
+
+            // Destroy existing chart if it exists
+            if (rateChart) {
+                rateChart.destroy();
+            }
+
+            // Create new chart
+            rateChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Rate (p/kWh)',
+                        data: data,
+                        backgroundColor: backgroundColors,
+                        borderColor: borderColors,
+                        borderWidth: borderWidths,
+                        borderRadius: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        annotation: { annotations: annotations },
+                        tooltip: {
+                            callbacks: {
+                                title: (items) => {
+                                    const rate = rates[items[0].dataIndex];
+                                    const isOptimal = optimalStarts.has(rate.start);
+                                    const time = items[0].label;
+                                    return isOptimal ? `★ ${time} (Optimal)` : time;
+                                },
+                                label: (item) => {
+                                    return `${item.raw.toFixed(2)}p/kWh`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: '#333', display: false },
+                            ticks: {
+                                color: '#888',
+                                maxRotation: 0,
+                                autoSkip: true,
+                                maxTicksLimit: 12
+                            }
+                        },
+                        y: {
+                            grid: { color: '#333' },
+                            ticks: {
+                                color: '#888',
+                                callback: (value) => value + 'p'
+                            },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
         }
 
         function updateRatesTable(rates) {
@@ -231,6 +386,14 @@
                 selectedSlots = data.slots || [];
                 displaySchedule(data);
                 updateRatesTable(currentRates);
+
+                // Update chart with optimal slots
+                if (data.slots && data.slots.length > 0) {
+                    const statusData = await fetch('/api/status').then(r => r.json());
+                    if (statusData.rates) {
+                        renderRateChart(statusData.rates, data.slots);
+                    }
+                }
             } catch (error) {
                 console.error('Error calculating:', error);
                 alert('Failed to calculate optimal slots');

@@ -2,15 +2,6 @@
 
 Future improvements for the Tesla Charging Optimizer.
 
-## Quick Wins
-
-Simple changes that can be done immediately.
-
-- [x] Update "Today's Rates" heading to "Available Rates" (now includes tomorrow)
-- [x] Add rate coverage badge showing "Today only" vs "Today + Tomorrow"
-- [x] Add health check endpoint (`/health`) for Coolify monitoring
-- [x] Show last updated timestamp in the UI
-
 ## High Value
 
 Major features that significantly improve the user experience.
@@ -19,11 +10,6 @@ Major features that significantly improve the user experience.
   - Add "I need to leave by" time picker
   - Only select charging slots before that deadline
   - Ensures car is ready when you need it
-
-- [ ] **Rate Chart Visualization**
-  - Visual graph showing prices over 24-48 hours
-  - Highlight optimal slots on the chart
-  - Show current time marker
 
 - [ ] **Start Charging Button**
   - Trigger Tesla charging via Home Assistant
@@ -102,8 +88,26 @@ Features for the future when core functionality is solid.
 
 ## Completed
 
-- [x] Next-day rates support for overnight charging optimization (v1.1.0)
-- [x] Initial release with Flask dashboard (v1.0.0)
+### v1.3.0
+- [x] **Rate Chart Visualization**
+  - 24-48 hour bar chart with color-coded rates using Chart.js
+  - Current time "NOW" marker
+  - Day boundary markers for today/tomorrow transition
+  - Optimal slots highlighted when calculated
+  - Responsive design for mobile
+
+### v1.2.0
+- [x] Update "Today's Rates" heading to "Available Rates"
+- [x] Add rate coverage badge showing "Today only" vs "Today + Tomorrow"
+- [x] Add health check endpoint (`/health`) for Coolify monitoring
+- [x] Show last updated timestamp in the UI
+- [x] Improved blocks display - shows number of charging sessions prominently
+
+### v1.1.0
+- [x] Next-day rates support for overnight charging optimization
+
+### v1.0.0
+- [x] Initial release with Flask dashboard
 - [x] Home Assistant integration for Tesla battery state
 - [x] Octopus Agile rate fetching
 - [x] Optimal charging slot calculator

@@ -2,6 +2,17 @@
 
 All notable changes to the Tesla Charging Optimizer will be documented in this file.
 
+## [1.3.0] - 2026-02-02
+
+### Added
+- **Rate Chart Visualization**: Interactive bar chart showing electricity rates over 24-48 hours
+- Built with Chart.js for smooth rendering and interactivity
+- Color-coded rate bars (green for cheap, yellow for medium, red for expensive)
+- Current time "NOW" marker to easily identify current position
+- Day boundary markers showing today/tomorrow transition
+- Optimal charging slots highlighted when calculation is performed
+- Responsive design that works well on mobile devices
+
 ## [1.2.0] - 2026-02-02
 
 ### Added
