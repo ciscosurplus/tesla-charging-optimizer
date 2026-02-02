@@ -2,6 +2,28 @@
 
 All notable changes to the Tesla Charging Optimizer will be documented in this file.
 
+## [1.4.0] - 2026-02-02
+
+### Added
+- **Departure Time Constraint**: New "Depart By" dropdown to specify when you need to leave
+  - Simplified dropdown with 30-minute time blocks from now until tomorrow night
+  - Only selects charging slots that complete before departure time
+  - Shows warning if target charge is not achievable before departure
+  - Visual departure marker on rate chart (blue dashed line labeled "DEPART")
+  - Slots after departure time are dimmed on the chart
+
+### Fixed
+- **Charging State Display**: Fixed bug where charging state showed "on/off" instead of human-readable text
+  - Now correctly uses `binary_sensor.tesla_model_y_charging` entity
+  - Converts "on" to "Charging" and "off" to "Not Charging"
+  - Fallback to `sensor.tesla_model_y_charging` with multiple state mappings
+
+### Changed
+- **Improved Dashboard Layout**: Split status cards into two rows for better organization
+  - Info row (3 cards): Battery Level, Charging State, Energy Needed
+  - Input row (2 cards): Target Charge, Depart By
+  - Responsive design maintains usability on mobile devices
+
 ## [1.3.0] - 2026-02-02
 
 ### Added

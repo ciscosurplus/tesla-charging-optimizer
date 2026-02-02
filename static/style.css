@@ -138,9 +138,16 @@ h2 {
 
 .status-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 15px;
-    margin-bottom: 20px;
+    margin-bottom: 15px;
+}
+
+.status-grid.info-grid {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.status-grid.input-grid {
+    grid-template-columns: repeat(2, 1fr);
 }
 
 .status-card {
@@ -197,6 +204,39 @@ h2 {
 .target-input span {
     font-size: 1.5rem;
     color: #888;
+}
+
+/* Departure Time Select */
+.departure-select {
+    padding: 10px 15px;
+    font-size: 0.9rem;
+    background: #0f0f23;
+    border: 2px solid #333;
+    border-radius: 8px;
+    color: #fff;
+    cursor: pointer;
+    min-width: 150px;
+}
+
+.departure-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+
+.departure-select option {
+    background: #1a1a2e;
+    color: #fff;
+}
+
+/* Warning message */
+.warning-message {
+    background: #3d2e0a;
+    color: #f59e0b;
+    border: 1px solid #f59e0b;
+    border-radius: 8px;
+    padding: 12px 15px;
+    margin-bottom: 15px;
+    font-size: 0.9rem;
 }
 
 .primary-btn {
@@ -470,6 +510,14 @@ footer {
 
     header h1 {
         font-size: 1.5rem;
+    }
+
+    .status-grid.info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .status-grid.input-grid {
+        grid-template-columns: 1fr;
     }
 
     .status-value {

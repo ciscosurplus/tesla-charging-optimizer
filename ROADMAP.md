@@ -6,7 +6,7 @@ Future improvements for the Tesla Charging Optimizer.
 
 Major features that significantly improve the user experience.
 
-- [ ] **Departure Time Constraint**
+- [x] **Departure Time Constraint** *(Completed in v1.4.0)*
   - Add "I need to leave by" time picker
   - Only select charging slots before that deadline
   - Ensures car is ready when you need it
@@ -87,6 +87,14 @@ Features for the future when core functionality is solid.
   - Support for other Agile regions
 
 ## Completed
+
+### v1.4.0
+- [x] **Departure Time Constraint**
+  - "Depart By" dropdown with 30-minute time blocks
+  - Only selects slots that complete before departure
+  - Warning when target charge is not achievable
+  - Visual departure marker on rate chart
+  - Dimmed slots after departure time
 
 ### v1.3.0
 - [x] **Rate Chart Visualization**

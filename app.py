@@ -23,7 +23,7 @@ KWH_PER_SLOT = CHARGER_POWER_KW * SLOT_DURATION_HOURS  # 3.5 kWh per slot
 DEFAULT_TARGET_PERCENT = 80
 
 # Application version
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.4.0"
 
 
 def load_ha_token():
@@ -72,11 +72,30 @@ def get_tesla_battery():
             range_miles = None
 
         # Try to get charging state (optional)
+        charging = "Unknown"
         try:
-            charging_state = ha_api_get("states/sensor.tesla_model_y_charging")
-            charging = charging_state.get("state", "unknown")
+            # Try binary_sensor first (most Tesla integrations use this)
+            charging_state = ha_api_get("states/binary_sensor.tesla_model_y_charging")
+            state_raw = charging_state.get("state", "").lower()
+            if state_raw == "on":
+                charging = "Charging"
+            elif state_raw == "off":
+                charging = "Not Charging"
+            else:
+                charging = state_raw.title() if state_raw else "Unknown"
         except:
-            charging = "unknown"
+            # Fallback: try sensor entity
+            try:
+                charging_state = ha_api_get("states/sensor.tesla_model_y_charging")
+                state_raw = charging_state.get("state", "").lower()
+                if state_raw in ["charging", "on", "yes", "true"]:
+                    charging = "Charging"
+                elif state_raw in ["not_charging", "off", "no", "false", "disconnected"]:
+                    charging = "Not Charging"
+                else:
+                    charging = state_raw.title() if state_raw else "Unknown"
+            except:
+                charging = "Unknown"
 
         return {
             "battery_percent": battery_percent,
@@ -152,7 +171,7 @@ def get_octopus_rates():
         return {"error": str(e)}
 
 
-def calculate_optimal_slots(current_percent, target_percent, rates):
+def calculate_optimal_slots(current_percent, target_percent, rates, departure_time=None):
     """Calculate the cheapest slots to charge the Tesla."""
     if isinstance(rates, dict) and "error" in rates:
         return rates
@@ -182,11 +201,34 @@ def calculate_optimal_slots(current_percent, target_percent, rates):
         except:
             continue
 
+    # Filter by departure time constraint (slots must END before departure)
+    if departure_time:
+        eligible_rates = []
+        for rate in future_rates:
+            try:
+                end_time = datetime.fromisoformat(rate["end"].replace("Z", "+00:00"))
+                if end_time <= departure_time:
+                    eligible_rates.append(rate)
+            except:
+                continue
+        future_rates = eligible_rates
+
     # Sort by rate (cheapest first)
     sorted_rates = sorted(future_rates, key=lambda x: x["rate"])
 
     # Select cheapest slots
     selected_slots = sorted_rates[:slots_needed]
+
+    # Check if we have enough slots
+    warning = None
+    if len(selected_slots) < slots_needed:
+        actual_kwh = len(selected_slots) * KWH_PER_SLOT
+        actual_percent_added = (actual_kwh / BATTERY_CAPACITY_KWH) * 100
+        achievable_percent = current_percent + actual_percent_added
+        if departure_time:
+            warning = f"Only {len(selected_slots)} slots available before departure. Can reach {achievable_percent:.0f}% instead of {target_percent}%."
+        else:
+            warning = f"Only {len(selected_slots)} future slots available."
 
     # Sort selected slots by time for display
     selected_slots.sort(key=lambda x: x["start"])
@@ -234,7 +276,7 @@ def calculate_optimal_slots(current_percent, target_percent, rates):
             block["avg_rate"] = sum(s["rate"] for s in block["slots"]) / len(block["slots"])
             del block["slots"]  # Remove individual slots to keep response clean
 
-    return {
+    result = {
         "kwh_needed": round(kwh_needed, 1),
         "slots_needed": slots_needed,
         "slots": selected_slots,
@@ -244,6 +286,11 @@ def calculate_optimal_slots(current_percent, target_percent, rates):
         "is_contiguous": is_contiguous,
         "kwh_per_slot": KWH_PER_SLOT,
     }
+
+    if warning:
+        result["warning"] = warning
+
+    return result
 
 
 @app.route("/")
@@ -290,6 +337,18 @@ def api_status():
 def api_calculate():
     """Calculate optimal charging slots."""
     target = request.args.get("target", DEFAULT_TARGET_PERCENT, type=int)
+    departure_time_str = request.args.get("departure_time")
+
+    # Parse departure time if provided
+    departure_time = None
+    if departure_time_str:
+        try:
+            departure_time = datetime.fromisoformat(departure_time_str.replace("Z", "+00:00"))
+            # If no timezone provided, assume local timezone
+            if departure_time.tzinfo is None:
+                departure_time = departure_time.astimezone()
+        except ValueError:
+            return jsonify({"error": "Invalid departure_time format"}), 400
 
     tesla = get_tesla_battery()
     if "error" in tesla:
@@ -300,10 +359,13 @@ def api_calculate():
         return jsonify({"error": rates_result["error"]}), 500
 
     current_percent = tesla.get("battery_percent", 0)
-    result = calculate_optimal_slots(current_percent, target, rates_result["rates"])
+    result = calculate_optimal_slots(current_percent, target, rates_result["rates"], departure_time)
     result["current_percent"] = current_percent
     result["target_percent"] = target
     result["includes_tomorrow"] = rates_result["includes_tomorrow"]
+
+    if departure_time:
+        result["departure_time"] = departure_time.isoformat()
 
     return jsonify(result)
 
