@@ -85,25 +85,50 @@ def get_tesla_battery():
 
 
 def get_octopus_rates():
-    """Get today's Octopus Agile rates from Home Assistant."""
+    """Get Octopus Agile rates from Home Assistant.
+
+    Fetches both current day and next day rates (available after 4pm).
+    This allows finding optimal charging slots that span overnight.
+
+    Returns dict with 'rates' list and 'includes_next_day' boolean.
+    """
     try:
-        # Get all states and find the Octopus rates event entity
+        # Get all states and find the Octopus rates event entities
         states = ha_api_get("states")
 
         rates_data = []
+        seen_starts = set()  # Track seen start times to avoid duplicates
+        has_current_day = False
+        has_next_day = False
+
         for state in states:
             entity_id = state.get("entity_id", "")
-            # Look for Octopus current day rates event
-            if "octopus_energy_electricity" in entity_id and "current_day_rates" in entity_id:
+
+            # Look for both current_day_rates and next_day_rates entities
+            is_current_day = "octopus_energy_electricity" in entity_id and "current_day_rates" in entity_id
+            is_next_day = "octopus_energy_electricity" in entity_id and "next_day_rates" in entity_id
+
+            if is_current_day or is_next_day:
                 attributes = state.get("attributes", {})
                 rates = attributes.get("rates", [])
+
+                if rates:
+                    if is_current_day:
+                        has_current_day = True
+                    if is_next_day:
+                        has_next_day = True
 
                 for rate in rates:
                     start = rate.get("start") or rate.get("valid_from")
                     end = rate.get("end") or rate.get("valid_to")
                     value = rate.get("value_inc_vat")
 
+                    # Skip duplicates (next_day might overlap with current_day at midnight)
+                    if start in seen_starts:
+                        continue
+
                     if start and value is not None:
+                        seen_starts.add(start)
                         # Convert from pounds to pence if value seems to be in pounds
                         rate_pence = value * 100 if value < 1 else value
                         rates_data.append({
@@ -111,11 +136,15 @@ def get_octopus_rates():
                             "end": end,
                             "rate": rate_pence,  # p/kWh including VAT
                         })
-                break
 
         # Sort by start time
         rates_data.sort(key=lambda x: x["start"])
-        return rates_data
+
+        return {
+            "rates": rates_data,
+            "includes_today": has_current_day,
+            "includes_tomorrow": has_next_day,
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -224,11 +253,28 @@ def index():
 def api_status():
     """Get current Tesla and rates status."""
     tesla = get_tesla_battery()
-    rates = get_octopus_rates()
+    rates_result = get_octopus_rates()
+
+    if "error" in rates_result:
+        return jsonify({
+            "tesla": tesla,
+            "rates": [],
+            "rates_info": {"error": rates_result["error"]},
+            "config": {
+                "battery_capacity_kwh": BATTERY_CAPACITY_KWH,
+                "charger_power_kw": CHARGER_POWER_KW,
+                "kwh_per_slot": KWH_PER_SLOT,
+            }
+        })
 
     return jsonify({
         "tesla": tesla,
-        "rates": rates,
+        "rates": rates_result["rates"],
+        "rates_info": {
+            "includes_today": rates_result["includes_today"],
+            "includes_tomorrow": rates_result["includes_tomorrow"],
+            "total_slots": len(rates_result["rates"]),
+        },
         "config": {
             "battery_capacity_kwh": BATTERY_CAPACITY_KWH,
             "charger_power_kw": CHARGER_POWER_KW,
@@ -246,14 +292,15 @@ def api_calculate():
     if "error" in tesla:
         return jsonify({"error": tesla["error"]}), 500
 
-    rates = get_octopus_rates()
-    if isinstance(rates, dict) and "error" in rates:
-        return jsonify({"error": rates["error"]}), 500
+    rates_result = get_octopus_rates()
+    if "error" in rates_result:
+        return jsonify({"error": rates_result["error"]}), 500
 
     current_percent = tesla.get("battery_percent", 0)
-    result = calculate_optimal_slots(current_percent, target, rates)
+    result = calculate_optimal_slots(current_percent, target, rates_result["rates"])
     result["current_percent"] = current_percent
     result["target_percent"] = target
+    result["includes_tomorrow"] = rates_result["includes_tomorrow"]
 
     return jsonify(result)
 
