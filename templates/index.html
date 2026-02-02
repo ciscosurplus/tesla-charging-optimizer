@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tesla Charging Optimizer</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRWIZYWD7Occij6YpSk14c18GWClOLPAGzghw&s" alt="Tesla Model Y" class="car-logo">
+            <h1>Tesla Charging Optimizer</h1>
+            <p class="subtitle">Find the cheapest Octopus Agile slots</p>
+        </header>
+
+        <section class="status-section">
+            <h2>Current Status</h2>
+            <div class="status-grid">
+                <div class="status-card">
+                    <div class="status-label">Battery Level</div>
+                    <div class="status-value" id="battery-level">--</div>
+                    <div class="status-sublabel" id="battery-range"></div>
+                </div>
+                <div class="status-card">
+                    <div class="status-label">Charging State</div>
+                    <div class="status-value" id="charging-state">--</div>
+                </div>
+                <div class="status-card">
+                    <div class="status-label">Target Charge</div>
+                    <div class="target-input">
+                        <input type="number" id="target-percent" value="{{ default_target }}" min="0" max="100" step="5">
+                        <span>%</span>
+                    </div>
+                </div>
+                <div class="status-card">
+                    <div class="status-label">Energy Needed</div>
+                    <div class="status-value" id="energy-needed">--</div>
+                    <div class="status-sublabel" id="slots-needed"></div>
+                </div>
+            </div>
+            <button id="calculate-btn" class="primary-btn">Calculate Optimal Slots</button>
+        </section>
+
+        <section class="schedule-section" id="schedule-section" style="display: none;">
+            <h2>Optimal Charging Schedule</h2>
+            <div class="schedule-summary" id="schedule-summary"></div>
+            <div class="schedule-list" id="schedule-list"></div>
+        </section>
+
+        <section class="rates-section">
+            <h2>Today's Rates</h2>
+            <div class="rates-table-container">
+                <table class="rates-table" id="rates-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Rate (p/kWh)</th>
+                            <th>Cost for 3.5kWh</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rates-body">
+                        <tr><td colspan="3">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <footer>
+            <p>Data from Home Assistant | Tesla Model Y LR (75kWh) | 7kW Charger</p>
+        </footer>
+    </div>
+
+    <script>
+        const KWH_PER_SLOT = 3.5;
+        const BATTERY_CAPACITY = 75;
+        let currentRates = [];
+        let selectedSlots = [];
+
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+
+                // Update Tesla status
+                if (data.tesla && !data.tesla.error) {
+                    document.getElementById('battery-level').textContent =
+                        data.tesla.battery_percent.toFixed(0) + '%';
+
+                    if (data.tesla.range_miles) {
+                        document.getElementById('battery-range').textContent =
+                            data.tesla.range_miles.toFixed(0) + ' miles range';
+                    }
+
+                    document.getElementById('charging-state').textContent =
+                        data.tesla.charging_state || 'Unknown';
+                } else {
+                    document.getElementById('battery-level').textContent = 'Error';
+                    document.getElementById('charging-state').textContent =
+                        data.tesla?.error || 'Unable to fetch';
+                }
+
+                // Update rates table
+                if (data.rates && !data.rates.error) {
+                    currentRates = data.rates;
+                    updateRatesTable(data.rates);
+                }
+
+                // Calculate initial energy needed
+                updateEnergyNeeded();
+            } catch (error) {
+                console.error('Error fetching status:', error);
+            }
+        }
+
+        function updateRatesTable(rates) {
+            const tbody = document.getElementById('rates-body');
+            const now = new Date();
+
+            if (!rates || rates.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3">No rates available</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = rates.map(rate => {
+                const startTime = new Date(rate.start);
+                const endTime = new Date(rate.end);
+                const isPast = endTime < now;
+                const isCurrent = startTime <= now && endTime > now;
+                const isSelected = selectedSlots.some(s => s.start === rate.start);
+
+                const timeStr = startTime.toLocaleTimeString('en-GB', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) + ' - ' + endTime.toLocaleTimeString('en-GB', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                const cost = (rate.rate * KWH_PER_SLOT).toFixed(2);
+                const rateClass = getRateClass(rate.rate);
+
+                let rowClass = rateClass;
+                if (isPast) rowClass += ' past';
+                if (isCurrent) rowClass += ' current';
+                if (isSelected) rowClass += ' selected';
+
+                return `<tr class="${rowClass}">
+                    <td>${timeStr}</td>
+                    <td>${rate.rate.toFixed(2)}p</td>
+                    <td>${cost}p</td>
+                </tr>`;
+            }).join('');
+        }
+
+        function getRateClass(rate) {
+            if (rate < 10) return 'rate-low';
+            if (rate < 20) return 'rate-medium';
+            if (rate < 30) return 'rate-high';
+            return 'rate-very-high';
+        }
+
+        function updateEnergyNeeded() {
+            const batteryText = document.getElementById('battery-level').textContent;
+            const currentPercent = parseFloat(batteryText) || 0;
+            const targetPercent = parseInt(document.getElementById('target-percent').value) || 80;
+
+            const percentNeeded = Math.max(0, targetPercent - currentPercent);
+            const kwhNeeded = (percentNeeded / 100) * BATTERY_CAPACITY;
+            const slotsNeeded = Math.ceil(kwhNeeded / KWH_PER_SLOT);
+
+            document.getElementById('energy-needed').textContent = kwhNeeded.toFixed(1) + ' kWh';
+            document.getElementById('slots-needed').textContent = slotsNeeded + ' slots needed';
+        }
+
+        async function calculateOptimal() {
+            const target = document.getElementById('target-percent').value;
+            const btn = document.getElementById('calculate-btn');
+            btn.disabled = true;
+            btn.textContent = 'Calculating...';
+
+            try {
+                const response = await fetch(`/api/calculate?target=${target}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+
+                selectedSlots = data.slots || [];
+                displaySchedule(data);
+                updateRatesTable(currentRates);
+            } catch (error) {
+                console.error('Error calculating:', error);
+                alert('Failed to calculate optimal slots');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Calculate Optimal Slots';
+            }
+        }
+
+        function displaySchedule(data) {
+            const section = document.getElementById('schedule-section');
+            const summary = document.getElementById('schedule-summary');
+            const list = document.getElementById('schedule-list');
+
+            if (data.slots_needed === 0) {
+                summary.innerHTML = `
+                    <div class="summary-message success">
+                        Battery already at or above target (${data.target_percent}%)
+                    </div>`;
+                list.innerHTML = '';
+                section.style.display = 'block';
+                return;
+            }
+
+            const contiguousText = data.is_contiguous ? 'contiguous' : 'scattered';
+
+            summary.innerHTML = `
+                <div class="summary-stats">
+                    <div class="stat">
+                        <span class="stat-value">${data.kwh_needed} kWh</span>
+                        <span class="stat-label">Energy needed</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">${data.slots_needed}</span>
+                        <span class="stat-label">Slots (${contiguousText})</span>
+                    </div>
+                    <div class="stat highlight">
+                        <span class="stat-value">&pound;${data.total_cost_pounds.toFixed(2)}</span>
+                        <span class="stat-label">Total cost</span>
+                    </div>
+                </div>
+                <div class="charge-change">
+                    ${data.current_percent.toFixed(0)}% &rarr; ${data.target_percent}%
+                </div>`;
+
+            list.innerHTML = data.blocks.map(block => {
+                const startTime = new Date(block.start);
+                const endTime = new Date(block.end);
+                const timeStr = startTime.toLocaleTimeString('en-GB', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }) + ' - ' + endTime.toLocaleTimeString('en-GB', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                const duration = block.slot_count * 30;
+                const hours = Math.floor(duration / 60);
+                const mins = duration % 60;
+                const durationStr = hours > 0 ? `${hours}h${mins > 0 ? ` ${mins}m` : ''}` : `${mins}m`;
+
+                return `<div class="schedule-block ${getRateClass(block.avg_rate)}">
+                    <div class="block-header">
+                        <span class="block-time">${timeStr}</span>
+                        <span class="block-duration">${durationStr}</span>
+                    </div>
+                    <div class="block-details">
+                        <span class="block-energy">${block.kwh.toFixed(1)} kWh</span>
+                        <span class="block-rate">avg ${block.avg_rate.toFixed(1)}p/kWh</span>
+                        <span class="block-cost">${(block.total_cost_pence / 100).toFixed(2)}</span>
+                    </div>
+                </div>`;
+            }).join('');
+
+            section.style.display = 'block';
+        }
+
+        // Event listeners
+        document.getElementById('calculate-btn').addEventListener('click', calculateOptimal);
+        document.getElementById('target-percent').addEventListener('change', updateEnergyNeeded);
+
+        // Initial load
+        fetchStatus();
+
+        // Refresh status every 5 minutes
+        setInterval(fetchStatus, 5 * 60 * 1000);
+    </script>
+</body>
+</html>
